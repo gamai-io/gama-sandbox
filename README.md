@@ -1,3 +1,6 @@
+[![CI](https://github.com/gamai-io/gama-sandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/gamai-io/gama-sandbox/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 # gama-sandbox
 
 Isolation layer for AI agents that must run untrusted code: **filesystem + network gate without Docker**, plus a per-session sandbox harness with Docker/bwrap/srt fallback.
