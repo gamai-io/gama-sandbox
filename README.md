@@ -34,6 +34,7 @@ echo '{"op":"stop","sid":"job1"}' | python3 sessionbox/run.py
 Guarantees: no network by default; only the per-sid workdir is exposed; every exec has a hard timeout; `stop` snapshots and deletes state; fail-closed on unknown sid/backend.
 
 ## Measured (MI250X cluster + x86 hosts)
+> Note: measured on an internal lab (Firecracker + gVisor on MI250X/x86). The harness for those runs is **not shipped here**; treat the figures as indicative. What you can run locally is `sandbox_srt.sh`.
 
 - Firecracker microVM (reference): boot **1.846 s**, restore **2.286 ms** (≈native).
 - gVisor `runsc` syscall overhead: **4–13×** vs native.
