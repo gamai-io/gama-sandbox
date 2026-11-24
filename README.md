@@ -49,3 +49,9 @@ Guarantees: no network by default; only the per-sid workdir is exposed; every ex
 ## License
 
 Apache-2.0.
+
+## Why "no Docker" is the point (asked on AI Lounge, 24 Nov 2026)
+
+Small teams want their agent walled off from the filesystem and the network and have **nobody to run
+Docker**. `sandbox_srt.sh` gives them that with `srt`/bubblewrap and no daemon to babysit. Teams that
+already operate Docker keep Docker — this is not a replacement argument.
