@@ -23,6 +23,25 @@ Two independent pieces, both dependency-light:
 
 Secrets denied by default: `~/.ssh`, `~/.aws`, `~/.config/gama*`, `/etc/shadow`, `**/.env`, `**/*.pem`, `**/*.key`, `id_rsa`, `id_ed25519`.
 
+### Environment (`--env`) — sandboxed child only
+
+`--env KEY=VAL` is **never exported** into the shell that starts `srt`. It is turned into an
+`env KEY=VAL …` prefix that runs *inside* the sandbox, so the value exists only after bwrap has
+applied the filesystem/network/namespace restrictions. `LD_PRELOAD`, `NODE_OPTIONS`, `PATH` and
+friends therefore cannot execute code in the unsandboxed `srt`/`node`/`timeout` parent
+(see `SECURITY.md`, fixed 2026-11-26; regression test `tests/test_env_isolation.sh`).
+
+The wrapper also starts `srt` with a **minimal allow-list environment** (`PATH`, `HOME`, `USER`,
+`LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `TZ`, `TMPDIR`). The sandboxed command does not
+inherit the caller's environment, so pass what it needs explicitly:
+
+```bash
+./sandbox_srt.sh offline --env FOO=bar --env AWS_PROFILE=job -- bash -lc 'echo "$FOO"'
+```
+
+Malformed specs (`--env FOO`, `--env 1BAD=x`) are rejected before anything runs.
+
+
 ## sessionbox
 
 ```bash
@@ -31,7 +50,7 @@ echo '{"op":"exec","sid":"job1","cmd":"python -c \"print(6*7)\""}' | python3 ses
 echo '{"op":"stop","sid":"job1"}' | python3 sessionbox/run.py
 ```
 
-Guarantees: no network by default; only the per-sid workdir is exposed; every exec has a hard timeout; `stop` snapshots and deletes state; fail-closed on unknown sid/backend.
+Guarantees: no network by default; only the per-sid workdir is exposed; every exec has a hard timeout; `stop` snapshots and deletes state; fail-closed on unknown sid/backend. The `bwrap`/`srt` backends run with a cleared/allow-listed environment, so the caller's variables (API keys, `LD_PRELOAD`, `NODE_OPTIONS`, …) do not reach the sandboxed process.
 
 ## Measured (MI250X cluster + x86 hosts)
 > Note: measured on an internal lab (Firecracker + gVisor on MI250X/x86). The harness for those runs is **not shipped here**; treat the figures as indicative. What you can run locally is `sandbox_srt.sh`.

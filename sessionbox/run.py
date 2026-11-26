@@ -37,7 +37,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STATE_DIR = os.environ.get("SESSIONBOX_STATE_DIR", os.path.join(BASE, "state"))
 WORK_ROOT = os.environ.get("SESSIONBOX_WORK_ROOT", "/tmp/gama_sessionbox")
 SNAP_DIR = os.environ.get("SESSIONBOX_SNAPSHOT_DIR", os.path.join(BASE, "snapshots"))
-LOCK_PATH = os.path.join(BASE, ".sessionbox.lock")
+LOCK_PATH = os.path.join(STATE_DIR, ".sessionbox.lock")
 MAX_SESSIONS = int(os.environ.get("SESSIONBOX_MAX_SESSIONS", "8"))
 
 DEFAULT_IMAGE = "python:3.12-alpine"
@@ -141,12 +141,13 @@ class Lock:
         return False
 
 
-def run_argv(argv, timeout, cwd=None):
+def run_argv(argv, timeout, cwd=None, env=None):
     t0 = time.time()
     try:
         proc = subprocess.run(
             argv,
             cwd=cwd,
+            env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -173,6 +174,39 @@ def run_argv(argv, timeout, cwd=None):
         return {"rc": None, "stdout": "", "stderr": str(exc), "timed_out": False, "ms": 0}
 
 
+def sandbox_env():
+    """Allow-list okruzenja za bwrap/srt roditelja.
+
+    Sandbox se ne smije oslanjati na to da je pozivalac 'cist': ako u okruzenju
+    stoji LD_PRELOAD / LD_AUDIT / NODE_OPTIONS / BASH_ENV, loader bi ih izvrsio
+    u NESANDBOXOVANOM `bwrap`/`srt`(node) procesu prije ikakve restrikcije.
+    Zato se roditelju salje samo mali allow-list; tajna iz okruzenja (API
+    kljucevi, tokeni) tako ne ulazi ni u roditelja ni u pijesak.
+    """
+    env = {}
+    for k in ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
+              "TERM", "TZ", "TMPDIR"):
+        v = os.environ.get(k)
+        if v:
+            env[k] = v
+    # path do stvarnih binarija (mogu biti van /usr/bin, npr. /opt/node22/bin/srt)
+    parts = [p for p in env.get("PATH", "").split(":") if p]
+    for exe in ("srt", "bwrap"):
+        found = shutil.which(exe)
+        if found:
+            d = os.path.dirname(found)
+            if d not in parts:
+                parts.append(d)
+    for d in ("/usr/local/bin", "/usr/bin", "/bin"):
+        if d not in parts:
+            parts.append(d)
+    env["PATH"] = ":".join(parts)
+    env.setdefault("HOME", "/tmp")
+    env.setdefault("LANG", "C.UTF-8")
+    env.setdefault("LC_ALL", "C.UTF-8")
+    return env
+
+
 def docker_available():
     if not shutil.which("docker"):
         return False
@@ -191,7 +225,7 @@ def bwrap_available():
         "--proc", "/proc", "--dev", "/dev",
         "/usr/bin/true",
     ]
-    return run_argv(probe, 5)["rc"] == 0
+    return run_argv(probe, 5, env=sandbox_env())["rc"] == 0
 
 
 def select_backend():
@@ -259,6 +293,7 @@ def bwrap_argv(work, cmd):
         "--symlink", "usr/lib64", "/lib64",
         "--proc", "/proc", "--ro-bind", "/proc/sys", "/proc/sys", "--dev", "/dev", "--tmpfs", "/tmp",
         "--bind", work, "/work", "--chdir", "/work",
+        "--clearenv",
         "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
         "--setenv", "HOME", "/tmp",
         "--setenv", "LANG", "C.UTF-8",
@@ -494,7 +529,7 @@ def namespace_exec(sid, st, cmd, timeout_s):
             st["settings"] = settings
             save_state(st)
         argv = ["srt", "--settings", settings, "-c", cmd]
-    res = run_argv(argv, timeout_s, cwd=work)
+    res = run_argv(argv, timeout_s, cwd=work, env=sandbox_env())
     if res["timed_out"]:
         return {"ok": False, "timed_out": True, "sid": sid, "backend": backend,
                 "rc": None, "stdout": clip(res["stdout"]), "stderr": clip(res["stderr"]),
