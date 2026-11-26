@@ -38,3 +38,9 @@ The latest release on `main` receives security fixes.
 
 ## Out of scope
 Findings that require a compromised host, or that only affect unsupported forks.
+
+## Known limit: /etc/shadow under srt
+
+srt 0.0.79 does not enforce a `denyRead` entry for `/etc/shadow`; the file remains
+readable inside that backend. bwrap and Docker do not mount `/etc`. Run the
+sandbox as an unprivileged user and prefer bwrap/Docker when this matters.

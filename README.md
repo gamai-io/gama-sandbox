@@ -21,7 +21,13 @@ Two independent pieces, both dependency-light:
 ./sandbox_srt.sh audit    -- bash -lc "..."                       # diagnostics only, NOT a sandbox
 ```
 
-Secrets denied by default: `~/.ssh`, `~/.aws`, `~/.config/gama*`, `/etc/shadow`, `**/.env`, `**/*.pem`, `**/*.key`, `id_rsa`, `id_ed25519`.
+Secrets denied by default: `~/.ssh`, `~/.aws`, `~/.config/gama*`, `**/.env`, `**/*.pem`, `**/*.key`, `id_rsa`, `id_ed25519`.
+
+**Known limit, measured:** with srt 0.0.79 the `denyRead` entry for
+`/etc/shadow` is not enforced (the file stays readable inside the srt sandbox);
+the bwrap and Docker backends do not expose `/etc` at all. Do not run the sandbox
+as root, and use bwrap/Docker when password hashes matter. This is reported
+upstream, not papered over.
 
 ### Environment (`--env`) — sandboxed child only
 
